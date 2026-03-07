@@ -7,7 +7,7 @@ import { PlayCircle, Loader2, Sparkles, Upload, FileText, CheckCircle2, Volume2 
 
 const API_BASE_URL = 'http://localhost:5000/api/Interview';
 
-type AppState = 'START' | 'RESUME_UPLOAD' | 'INTERVIEW' | 'ANALYZING' | 'RESULT';
+type AppState = 'START' | 'RESUME_UPLOAD' | 'INTRO' | 'INTERVIEW' | 'ANALYZING' | 'RESULT';
 
 function App() {
     const [state, setState] = useState<AppState>('START');
@@ -30,9 +30,11 @@ function App() {
         }
     };
 
-    // Automatically speak question when it changes in INTERVIEW state
+    // Automatically speak when state changes
     useEffect(() => {
-        if (state === 'INTERVIEW' && question) {
+        if (state === 'INTRO') {
+            speak("Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?");
+        } else if (state === 'INTERVIEW' && question) {
             speak(question);
         }
     }, [question, state]);
@@ -79,7 +81,7 @@ function App() {
     const proceedToInterview = async () => {
         setState('ANALYZING'); // Show loading while fetching question
         await fetchQuestion();
-        setState('INTERVIEW');
+        setState('INTRO');
     };
 
     const handleRecordingComplete = async (videoBlob: Blob) => {
@@ -188,6 +190,32 @@ function App() {
                             className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {resumePath ? 'Get Started with Tailored Questions' : 'Skip & Use General Questions'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {state === 'INTRO' && (
+                <div className="max-w-lg w-full bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-10 rounded-3xl shadow-2xl space-y-8 animate-in fade-in zoom-in duration-500 text-center">
+                    <div className="mx-auto w-24 h-24 rounded-full flex items-center justify-center mb-6 relative">
+                        <div className="absolute inset-0 bg-indigo-500 rounded-full animate-ping opacity-20"></div>
+                        <div className="relative bg-indigo-500/20 w-full h-full rounded-full flex items-center justify-center">
+                            <Sparkles className="h-10 w-10 text-indigo-400" />
+                        </div>
+                    </div>
+                    <h2 className="text-4xl font-bold mb-4 text-white font-display">Are you ready?</h2>
+                    <p className="text-gray-300 text-lg leading-relaxed">
+                        I am your AI Mock Interviewer. I have prepared your interview questions. Let me know when you're ready to start.
+                    </p>
+                    <button
+                        onClick={() => setState('INTERVIEW')}
+                        className="w-full py-4 mt-8 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-emerald-500/25 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                    >
+                        Yes, I'm Ready!
+                    </button>
+                    <div className="absolute top-4 right-4">
+                        <button onClick={() => speak("Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?")} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
+                            <Volume2 className="h-5 w-5 text-indigo-400" />
                         </button>
                     </div>
                 </div>
