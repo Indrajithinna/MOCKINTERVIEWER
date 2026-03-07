@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import axios from 'axios';
 import WebcamRecorder from './components/WebcamRecorder';
 import Timer from './components/Timer';
 import FeedbackDisplay from './components/FeedbackDisplay';
-import { PlayCircle, Loader2, Sparkles } from 'lucide-react';
+import { PlayCircle, Loader2, Sparkles, Upload, FileText, CheckCircle2 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api/Interview';
 
-type AppState = 'START' | 'INTERVIEW' | 'ANALYZING' | 'RESULT';
+type AppState = 'START' | 'RESUME_UPLOAD' | 'INTERVIEW' | 'ANALYZING' | 'RESULT';
 
 function App() {
     const [state, setState] = useState<AppState>('START');
@@ -15,18 +15,51 @@ function App() {
     const [feedback, setFeedback] = useState('');
     const [videoUrl, setVideoUrl] = useState('');
     const [error, setError] = useState('');
+    const [resumePath, setResumePath] = useState<string | null>(null);
+    const [isUploadingResume, setIsUploadingResume] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const fetchQuestion = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/questions`);
-            setQuestion(response.data.question);
+            if (resumePath) {
+                const response = await axios.post(`${API_BASE_URL}/resume-questions?resumeFilePath=${encodeURIComponent(resumePath)}`);
+                const questions = JSON.parse(response.data.questions);
+                setQuestion(questions[0] || "Tell me about yourself.");
+            } else {
+                const response = await axios.get(`${API_BASE_URL}/questions`);
+                setQuestion(response.data.question);
+            }
         } catch (err) {
             console.error('Failed to fetch question:', err);
-            setQuestion('Explain Dependency Injection and its benefits.'); // Fallback
+            setQuestion('Explain Dependency Injection and its benefits.');
         }
     };
 
-    const handleStart = async () => {
+    const handleStart = () => {
+        setState('RESUME_UPLOAD');
+    };
+
+    const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingResume(true);
+        const formData = new FormData();
+        formData.append('resume', file);
+
+        try {
+            const response = await axios.post(`${API_BASE_URL}/upload-resume`, formData);
+            setResumePath(response.data.resumeFilePath);
+        } catch (err) {
+            console.error('Resume upload failed:', err);
+            setError('Failed to upload resume. Proceeding without it.');
+        } finally {
+            setIsUploadingResume(false);
+        }
+    };
+
+    const proceedToInterview = async () => {
+        setState('ANALYZING'); // Show loading while fetching question
         await fetchQuestion();
         setState('INTERVIEW');
     };
@@ -38,7 +71,11 @@ function App() {
         formData.append('video', videoBlob, 'interview.webm');
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/upload`, formData);
+            const url = resumePath 
+                ? `${API_BASE_URL}/upload?resumeFilePath=${encodeURIComponent(resumePath)}`
+                : `${API_BASE_URL}/upload`;
+            
+            const response = await axios.post(url, formData);
             setFeedback(response.data.aiFeedback);
             setVideoUrl(response.data.videoFilePath);
             setState('RESULT');
@@ -74,10 +111,61 @@ function App() {
                 </div>
             )}
 
+            {state === 'RESUME_UPLOAD' && (
+                <div className="max-w-lg w-full bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
+                    <div className="text-center">
+                        <h2 className="text-3xl font-bold mb-2">Upload Your Resume</h2>
+                        <p className="text-gray-400">Our AI will tailor the interview questions based on your experience and skills.</p>
+                    </div>
+
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${resumePath ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-700 hover:border-indigo-500 hover:bg-indigo-500/5'}`}
+                    >
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleResumeUpload} 
+                            accept=".pdf,.txt,.doc,.docx" 
+                            className="hidden" 
+                        />
+                        {resumePath ? (
+                            <div className="flex flex-col items-center space-y-3">
+                                <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+                                <span className="text-emerald-400 font-medium">Resume Uploaded Successfully!</span>
+                            </div>
+                        ) : isUploadingResume ? (
+                            <div className="flex flex-col items-center space-y-3">
+                                <Loader2 className="h-12 w-12 text-indigo-500 animate-spin" />
+                                <span className="text-gray-400">Analyzing Resume...</span>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center space-y-3">
+                                <Upload className="h-12 w-12 text-slate-500" />
+                                <span className="text-slate-400">Click to upload or drag and drop</span>
+                                <span className="text-xs text-slate-600">PDF, TXT, DOCX up to 10MB</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col space-y-3">
+                        <button
+                            onClick={proceedToInterview}
+                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {resumePath ? 'Get Started with Tailored Questions' : 'Skip & Use General Questions'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {state === 'INTERVIEW' && (
                 <div className="w-full max-w-4xl space-y-6">
                     <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-2xl">
-                        <h2 className="text-indigo-400 font-semibold mb-2 uppercase text-sm tracking-widest">Question</h2>
+                        <h2 className="text-indigo-400 font-semibold mb-2 uppercase text-sm tracking-widest flex items-center gap-2">
+                            {resumePath && <FileText className="w-4 h-4" />}
+                            {resumePath ? 'Tailored Question' : 'General Question'}
+                        </h2>
                         <p className="text-2xl font-display font-medium leading-tight">{question}</p>
                     </div>
 
@@ -100,8 +188,8 @@ function App() {
                 <div className="text-center space-y-6">
                     <Loader2 className="h-16 w-16 text-indigo-500 animate-spin mx-auto" />
                     <div>
-                        <h2 className="text-3xl font-bold mb-2">Analyzing Performance</h2>
-                        <p className="text-gray-400">Our AI is evaluating your communication skills and technical accuracy...</p>
+                        <h2 className="text-3xl font-bold mb-2">Processing...</h2>
+                        <p className="text-gray-400">Our AI is preparing your experience...</p>
                     </div>
                 </div>
             )}
@@ -110,6 +198,12 @@ function App() {
                 <>
                     {error && <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded mb-4">{error}</div>}
                     <FeedbackDisplay feedback={feedback} videoUrl={videoUrl} />
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className="mt-8 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                        Try Another Interview
+                    </button>
                 </>
             )}
         </div>

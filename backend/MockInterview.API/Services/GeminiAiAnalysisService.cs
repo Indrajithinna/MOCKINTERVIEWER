@@ -14,43 +14,63 @@ namespace MockInterview.API.Services
             _httpClient = httpClient;
         }
 
-        public async Task<string> AnalyzeInterviewAsync(string videoPath)
+        public async Task<string> AnalyzeInterviewAsync(string videoPath, string? resumeFilePath = null)
         {
             var apiKey = _config["AiService:GeminiApiKey"];
             var model = _config["AiService:Model"] ?? "gemini-1.5-flash";
             
-            if (string.IsNullOrEmpty(apiKey) || apiKey == "AIzaSyDLGbJtyKnAvDHkMu0tH4lsm5c2H5Gbwwo") // Using the key provided
+            if (string.IsNullOrEmpty(apiKey) || apiKey == "AIzaSyDLGbJtyKnAvDHkMu0tH4lsm5c2H5Gbwwo") 
             {
-                 // Fallback if key isn't set yet
                  if (apiKey == "PASTE_YOUR_GEMINI_KEY_HERE")
                     return "Mock Analysis: Please provide a valid Gemini API Key in appsettings.json.";
             }
 
             try
             {
-                // 1. Upload the video file to Gemini File API
-                var fileInfo = await UploadFileToGemini(videoPath, apiKey);
-                var fileUri = fileInfo.Uri;
+                // 1. Upload video
+                var videoFileInfo = await UploadFileToGemini(videoPath, apiKey, "video/webm");
+                var videoUri = videoFileInfo.Uri;
 
-                // 2. Wait for processing (Usually immediate for small files, but good practice for video)
-                await PollingProcessState(fileInfo.Name, apiKey);
+                // 2. Upload resume if available
+                string? resumeUri = null;
+                if (!string.IsNullOrEmpty(resumeFilePath))
+                {
+                    var ext = Path.GetExtension(resumeFilePath).ToLower();
+                    var mime = ext == ".pdf" ? "application/pdf" : "text/plain";
+                    var resumeFileInfo = await UploadFileToGemini(resumeFilePath, apiKey, mime);
+                    resumeUri = resumeFileInfo.Uri;
+                    await PollingProcessState(resumeFileInfo.Name, apiKey);
+                }
 
-                // 3. Generate Content (Transcription + Feedback)
+                await PollingProcessState(videoFileInfo.Name, apiKey);
+
+                // 3. Generate Content
                 var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
 
                 var prompt = "Watch this interview video carefully. " +
+                             (resumeUri != null ? "The user's resume is provided. " : "") +
                              "1. Transcribe the user's speech accurately. " +
-                             "2. Provide expert-level feedback on their technical explanation, confidence, and body language. " +
-                             "Format the output as follows:\n[TRANSCRIPT]\n(The text here)\n\n[FEEDBACK]\n(The analysis here)";
+                             "2. Provide expert-level feedback on their technical explanation, confidence, and body language." +
+                             (resumeUri != null ? " Compare their answers with the skills and experience mentioned in their resume." : "") +
+                             "\nFormat the output as follows:\n[TRANSCRIPT]\n(The text here)\n\n[FEEDBACK]\n(The analysis here)";
+
+                var parts = new List<object>
+                {
+                    new { text = prompt },
+                    new { file_data = new { mime_type = "video/webm", file_uri = videoUri } }
+                };
+
+                if (resumeUri != null)
+                {
+                    var mime = Path.GetExtension(resumeFilePath!).ToLower() == ".pdf" ? "application/pdf" : "text/plain";
+                    parts.Add(new { file_data = new { mime_type = mime, file_uri = resumeUri } });
+                }
 
                 var requestBody = new
                 {
                     contents = new[] {
                         new {
-                            parts = new object[] {
-                                new { text = prompt },
-                                new { file_data = new { mime_type = "video/webm", file_uri = fileUri } }
-                            }
+                            parts = parts.ToArray()
                         }
                     }
                 };
@@ -78,13 +98,13 @@ namespace MockInterview.API.Services
             }
         }
 
-        private async Task<(string Uri, string Name)> UploadFileToGemini(string filePath, string apiKey)
+        private async Task<(string Uri, string Name)> UploadFileToGemini(string filePath, string apiKey, string mimeType)
         {
             var uploadUrl = $"https://generativelanguage.googleapis.com/upload/v1beta/files?key={apiKey}";
             
             using var fileStream = File.OpenRead(filePath);
             var fileContent = new StreamContent(fileStream);
-            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("video/webm");
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
 
             var request = new MultipartFormDataContent();
             var metadata = new { file = new { display_name = Path.GetFileName(filePath) } };
@@ -100,6 +120,66 @@ namespace MockInterview.API.Services
             var fileProp = doc.RootElement.GetProperty("file");
             
             return (fileProp.GetProperty("uri").GetString()!, fileProp.GetProperty("name").GetString()!);
+        }
+
+        public async Task<string> GenerateQuestionsFromResumeAsync(string resumeFilePath)
+        {
+            var apiKey = _config["AiService:GeminiApiKey"];
+            var model = _config["AiService:Model"] ?? "gemini-1.5-flash";
+
+            try
+            {
+                var ext = Path.GetExtension(resumeFilePath).ToLower();
+                var mime = ext == ".pdf" ? "application/pdf" : "text/plain";
+                var resumeFileInfo = await UploadFileToGemini(resumeFilePath, apiKey, mime);
+                await PollingProcessState(resumeFileInfo.Name, apiKey);
+
+                var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+
+                var prompt = "Based on the provided resume, generate 5 relevant technical interview questions that would be challenging for this candidate. " +
+                             "Focus on the projects, skills, and experience mentioned. Return ONLY the questions as a JSON array of strings.";
+
+                var requestBody = new
+                {
+                    contents = new[] {
+                        new {
+                            parts = new object[] {
+                                new { text = prompt },
+                                new { file_data = new { mime_type = mime, file_uri = resumeFileInfo.Uri } }
+                            }
+                        }
+                    }
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonResponse = await response.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(jsonResponse);
+                    var text = doc.RootElement
+                        .GetProperty("candidates")[0]
+                        .GetProperty("content")
+                        .GetProperty("parts")[0]
+                        .GetProperty("text")
+                        .GetString();
+
+                    // Clean up markdown markers if present
+                    if (text != null && text.Contains("```json"))
+                    {
+                        text = text.Replace("```json", "").Replace("```", "").Trim();
+                    }
+
+                    return text ?? "[]";
+                }
+
+                return "[]";
+            }
+            catch (Exception)
+            {
+                return "[]";
+            }
         }
 
         private async Task PollingProcessState(string fileName, string apiKey)

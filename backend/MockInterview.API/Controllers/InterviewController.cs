@@ -38,8 +38,39 @@ namespace MockInterview.API.Controllers
             return Ok(new { question = Questions[index] });
         }
 
+        [HttpPost("upload-resume")]
+        public async Task<IActionResult> UploadResume(IFormFile resume)
+        {
+            if (resume == null || resume.Length == 0)
+                return BadRequest("No resume file uploaded.");
+
+            var uploadsFolder = Path.Combine(_env.WebRootPath, "uploads", "resumes");
+            if (!Directory.Exists(uploadsFolder))
+                Directory.CreateDirectory(uploadsFolder);
+
+            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(resume.FileName)}";
+            var filePath = Path.Combine(uploadsFolder, fileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await resume.CopyToAsync(stream);
+            }
+
+            return Ok(new { resumeFilePath = filePath });
+        }
+
+        [HttpPost("resume-questions")]
+        public async Task<IActionResult> GetResumeQuestions([FromQuery] string resumeFilePath)
+        {
+            if (string.IsNullOrEmpty(resumeFilePath) || !System.IO.File.Exists(resumeFilePath))
+                return BadRequest("Invalid resume file path.");
+
+            var questionsJson = await _aiService.GenerateQuestionsFromResumeAsync(resumeFilePath);
+            return Ok(new { questions = questionsJson });
+        }
+
         [HttpPost("upload")]
-        public async Task<IActionResult> UploadVideo(IFormFile video)
+        public async Task<IActionResult> UploadVideo(IFormFile video, [FromQuery] string? resumeFilePath = null)
         {
             if (video == null || video.Length == 0)
                 return BadRequest("No video file uploaded.");
@@ -56,7 +87,7 @@ namespace MockInterview.API.Controllers
                 await video.CopyToAsync(stream);
             }
 
-            var feedback = await _aiService.AnalyzeInterviewAsync(filePath);
+            var feedback = await _aiService.AnalyzeInterviewAsync(filePath, resumeFilePath);
 
             var session = new InterviewSession
             {
