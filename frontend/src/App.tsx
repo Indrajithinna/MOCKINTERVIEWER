@@ -30,6 +30,14 @@ function App() {
         { code: 'ml-IN', name: 'Malayalam' }
     ];
 
+    const INTRO_TEXTS: Record<string, string> = {
+        'en-IN': "Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?",
+        'hi-IN': "नमस्ते! मैं आपका एआई मॉक इंटरव्यूअर हूँ। मैंने कुछ प्रश्न तैयार किए हैं। क्या आप शुरू करने के लिए तैयार हैं?",
+        'kn-IN': "ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ ಎಐ ಮಾಕ್ ಇಂಟರ್ವ್ಯೂವರ್. ನಾನು ನಿಮಗಾಗಿ ಕೆಲವು ಪ್ರಶ್ನೆಗಳನ್ನು ಸಿದ್ಧಪಡಿಸಿದ್ದೇನೆ. ನೀವು ಪ್ರಾರಂಭಿಸಲು ಸಿದ್ಧರಿದ್ದೀರಾ?",
+        'te-IN': "నమస్కారం! నేను మీ ఏఐ మాక్ ఇంటర్వ్యూయర్‌ను. మీ కోసం కొన్ని ప్రశ్నలను సిద్ధం చేసాను. ప్రారంభించడానికి సిద్ధంగా ఉన్నారా?",
+        'ml-IN': "നമസ്കാരം! ഞാൻ നിങ്ങളുടെ എഐ മോക്ക് ഇന്റർവ്യൂവർ ആണ്. ഞാൻ നിങ്ങൾക്കായി ചില ചോദ്യങ്ങൾ തയ്യാറാക്കിയിട്ടുണ്ട്. നിങ്ങള്‍ തുടങ്ങാൻ തയ്യാറാണോ?"
+    };
+
     // Speak function (supports both native TTS and Sarvam Audio files)
     const speak = (text: string, audioUrl?: string) => {
         if (audioUrl) {
@@ -41,6 +49,7 @@ function App() {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = language;
             utterance.rate = 0.95;
             utterance.pitch = 1.05;
             window.speechSynthesis.speak(utterance);
@@ -50,11 +59,11 @@ function App() {
     // Automatically speak when state changes
     useEffect(() => {
         if (state === 'INTRO') {
-            speak("Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?");
+            speak(INTRO_TEXTS[language] || INTRO_TEXTS['en-IN']);
         } else if (state === 'INTERVIEW' && question) {
             speak(question, questionAudio);
         }
-    }, [question, questionAudio, state]);
+    }, [question, questionAudio, state, language]);
 
     const fetchQuestion = async () => {
         try {
@@ -261,7 +270,7 @@ function App() {
                         Yes, I'm Ready!
                     </button>
                     <div className="absolute top-4 right-4">
-                        <button onClick={() => speak("Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?")} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
+                        <button onClick={() => speak(INTRO_TEXTS[language] || INTRO_TEXTS['en-IN'])} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
                             <Volume2 className="h-5 w-5 text-indigo-400" />
                         </button>
                     </div>
