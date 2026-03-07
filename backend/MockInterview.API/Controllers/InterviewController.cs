@@ -4,6 +4,7 @@ using MockInterview.API.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace MockInterview.API.Controllers
@@ -70,7 +71,22 @@ namespace MockInterview.API.Controllers
                 return BadRequest("Invalid resume file path.");
 
             var questionsJson = await _aiService.GenerateQuestionsFromResumeAsync(resumeFilePath, language);
-            return Ok(new { questions = questionsJson });
+            var firstQuestion = "Tell me about yourself based on your resume.";
+
+            try 
+            {
+                // Robust extraction of the first string from a JSON array using Regex
+                var match = Regex.Match(questionsJson, @"\[\s*""([^""]+)""");
+                if (match.Success) 
+                {
+                    firstQuestion = match.Groups[1].Value;
+                }
+            } 
+            catch { }
+
+            var audioUrl = await _ttsService.GenerateSpeechAsync(firstQuestion, language);
+
+            return Ok(new { question = firstQuestion, audioUrl = audioUrl });
         }
 
         [HttpPost("upload")]

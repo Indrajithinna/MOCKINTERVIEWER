@@ -59,12 +59,11 @@ function App() {
     const fetchQuestion = async () => {
         try {
             if (resumePath) {
-                // To keep this demo simple, if they upload a resume, we just fetch a random question for now 
-                // in the real implementation this would call resume-questions and also hit the TTS endpoint.
-                // We'll fallback to standard TTS if audio isn't returned for resume questions.
                 const response = await axios.post(`${API_BASE_URL}/resume-questions?resumeFilePath=${encodeURIComponent(resumePath)}&language=${language}`);
-                const questions = JSON.parse(response.data.questions);
-                setQuestion(questions[0] || "Tell me about yourself.");
+                setQuestion(response.data.question);
+                if (response.data.audioUrl) {
+                    setQuestionAudio(response.data.audioUrl);
+                }
             } else {
                 const response = await axios.get(`${API_BASE_URL}/questions?language=${language}`);
                 setQuestion(response.data.question);
