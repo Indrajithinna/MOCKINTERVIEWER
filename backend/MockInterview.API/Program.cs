@@ -1,6 +1,8 @@
 using MockInterview.API.Services;
 using Microsoft.Extensions.FileProviders;
 
+DotNetEnv.Env.Load();
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -9,8 +11,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient();
 
-// Register Gemini AI Service
+// Register Services
 builder.Services.AddScoped<IAiAnalysisService, GeminiAiAnalysisService>();
+builder.Services.AddScoped<ITtsService, SarvamTtsService>();
 
 // Enable CORS for Vite frontend
 builder.Services.AddCors(options =>

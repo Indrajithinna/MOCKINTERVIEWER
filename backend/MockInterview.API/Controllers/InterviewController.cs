@@ -13,6 +13,7 @@ namespace MockInterview.API.Controllers
     public class InterviewController : ControllerBase
     {
         private readonly IAiAnalysisService _aiService;
+        private readonly ITtsService _ttsService;
         private readonly IWebHostEnvironment _env;
 
         private static readonly List<string> Questions = new()
@@ -24,18 +25,21 @@ namespace MockInterview.API.Controllers
             "Explain Polymorphism with a real-world example."
         };
 
-        public InterviewController(IAiAnalysisService aiService, IWebHostEnvironment env)
+        public InterviewController(IAiAnalysisService aiService, ITtsService ttsService, IWebHostEnvironment env)
         {
             _aiService = aiService;
+            _ttsService = ttsService;
             _env = env;
         }
 
         [HttpGet("questions")]
-        public ActionResult<string> GetRandomQuestion()
+        public async Task<ActionResult<string>> GetRandomQuestion([FromQuery] string language = "en-IN")
         {
             var random = new Random();
             int index = random.Next(Questions.Count);
-            return Ok(new { question = Questions[index] });
+            var q = Questions[index];
+            var audioUrl = await _ttsService.GenerateSpeechAsync(q, language);
+            return Ok(new { question = q, audioUrl = audioUrl });
         }
 
         [HttpPost("upload-resume")]
@@ -60,17 +64,17 @@ namespace MockInterview.API.Controllers
         }
 
         [HttpPost("resume-questions")]
-        public async Task<IActionResult> GetResumeQuestions([FromQuery] string resumeFilePath)
+        public async Task<IActionResult> GetResumeQuestions([FromQuery] string resumeFilePath, [FromQuery] string language = "en-IN")
         {
             if (string.IsNullOrEmpty(resumeFilePath) || !System.IO.File.Exists(resumeFilePath))
                 return BadRequest("Invalid resume file path.");
 
-            var questionsJson = await _aiService.GenerateQuestionsFromResumeAsync(resumeFilePath);
+            var questionsJson = await _aiService.GenerateQuestionsFromResumeAsync(resumeFilePath, language);
             return Ok(new { questions = questionsJson });
         }
 
         [HttpPost("upload")]
-        public async Task<IActionResult> UploadVideo(IFormFile video, [FromQuery] string? resumeFilePath = null)
+        public async Task<IActionResult> UploadVideo(IFormFile video, [FromQuery] string? resumeFilePath = null, [FromQuery] string language = "en-IN")
         {
             if (video == null || video.Length == 0)
                 return BadRequest("No video file uploaded.");
@@ -87,7 +91,7 @@ namespace MockInterview.API.Controllers
                 await video.CopyToAsync(stream);
             }
 
-            var feedback = await _aiService.AnalyzeInterviewAsync(filePath, resumeFilePath);
+            var feedback = await _aiService.AnalyzeInterviewAsync(filePath, resumeFilePath, language);
 
             var session = new InterviewSession
             {
@@ -98,7 +102,9 @@ namespace MockInterview.API.Controllers
                 CreatedAt = DateTime.UtcNow
             };
 
-            return Ok(session);
+            var feedbackAudioUrl = await _ttsService.GenerateSpeechAsync(feedback, language);
+
+            return Ok(new { session, feedbackAudioUrl });
         }
     }
 }

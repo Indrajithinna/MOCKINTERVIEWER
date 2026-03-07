@@ -12,15 +12,32 @@ type AppState = 'START' | 'RESUME_UPLOAD' | 'INTRO' | 'INTERVIEW' | 'ANALYZING' 
 function App() {
     const [state, setState] = useState<AppState>('START');
     const [question, setQuestion] = useState('');
+    const [questionAudio, setQuestionAudio] = useState('');
     const [feedback, setFeedback] = useState('');
+    const [feedbackAudio, setFeedbackAudio] = useState('');
     const [videoUrl, setVideoUrl] = useState('');
     const [error, setError] = useState('');
     const [resumePath, setResumePath] = useState<string | null>(null);
+    const [language, setLanguage] = useState('en-IN');
     const [isUploadingResume, setIsUploadingResume] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Speak function
-    const speak = (text: string) => {
+    const LANGUAGES = [
+        { code: 'en-IN', name: 'English' },
+        { code: 'hi-IN', name: 'Hindi' },
+        { code: 'kn-IN', name: 'Kannada' },
+        { code: 'te-IN', name: 'Telugu' },
+        { code: 'ml-IN', name: 'Malayalam' }
+    ];
+
+    // Speak function (supports both native TTS and Sarvam Audio files)
+    const speak = (text: string, audioUrl?: string) => {
+        if (audioUrl) {
+            const audio = new Audio(`${API_BASE_URL.replace('/api/Interview', '')}${audioUrl}`);
+            audio.play().catch(e => console.error("Audio play failed:", e));
+            return;
+        }
+
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
@@ -35,19 +52,25 @@ function App() {
         if (state === 'INTRO') {
             speak("Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?");
         } else if (state === 'INTERVIEW' && question) {
-            speak(question);
+            speak(question, questionAudio);
         }
-    }, [question, state]);
+    }, [question, questionAudio, state]);
 
     const fetchQuestion = async () => {
         try {
             if (resumePath) {
-                const response = await axios.post(`${API_BASE_URL}/resume-questions?resumeFilePath=${encodeURIComponent(resumePath)}`);
+                // To keep this demo simple, if they upload a resume, we just fetch a random question for now 
+                // in the real implementation this would call resume-questions and also hit the TTS endpoint.
+                // We'll fallback to standard TTS if audio isn't returned for resume questions.
+                const response = await axios.post(`${API_BASE_URL}/resume-questions?resumeFilePath=${encodeURIComponent(resumePath)}&language=${language}`);
                 const questions = JSON.parse(response.data.questions);
                 setQuestion(questions[0] || "Tell me about yourself.");
             } else {
-                const response = await axios.get(`${API_BASE_URL}/questions`);
+                const response = await axios.get(`${API_BASE_URL}/questions?language=${language}`);
                 setQuestion(response.data.question);
+                if (response.data.audioUrl) {
+                    setQuestionAudio(response.data.audioUrl);
+                }
             }
         } catch (err) {
             console.error('Failed to fetch question:', err);
@@ -92,12 +115,24 @@ function App() {
 
         try {
             const url = resumePath
-                ? `${API_BASE_URL}/upload?resumeFilePath=${encodeURIComponent(resumePath)}`
-                : `${API_BASE_URL}/upload`;
+                ? `${API_BASE_URL}/upload?resumeFilePath=${encodeURIComponent(resumePath)}&language=${language}`
+                : `${API_BASE_URL}/upload?language=${language}`;
 
             const response = await axios.post(url, formData);
-            setFeedback(response.data.aiFeedback);
-            setVideoUrl(response.data.videoFilePath);
+
+            // Expected response logic updated to handle audioUrl
+            if (response.data.session) {
+                setFeedback(response.data.session.aiFeedback);
+                setVideoUrl(response.data.session.videoFilePath);
+            } else {
+                setFeedback(response.data.aiFeedback);
+                setVideoUrl(response.data.videoFilePath);
+            }
+
+            if (response.data.feedbackAudioUrl) {
+                setFeedbackAudio(response.data.feedbackAudioUrl);
+            }
+
             setState('RESULT');
         } catch (err) {
             console.error('Upload failed:', err);
@@ -185,6 +220,19 @@ function App() {
                     </div>
 
                     <div className="flex flex-col space-y-3">
+                        <label className="text-gray-400 font-medium text-left">Select Interview Language</label>
+                        <select
+                            value={language}
+                            onChange={(e) => setLanguage(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+                        >
+                            {LANGUAGES.map((lang) => (
+                                <option key={lang.code} value={lang.code}>{lang.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col space-y-3">
                         <button
                             onClick={proceedToInterview}
                             className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -225,7 +273,7 @@ function App() {
                 <div className="w-full max-w-4xl space-y-6">
                     <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-2xl shadow-2xl relative overflow-hidden group">
                         <div className="absolute top-4 right-4 animate-bounce">
-                            <button onClick={() => speak(question)} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
+                            <button onClick={() => speak(question, questionAudio)} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
                                 <Volume2 className="h-5 w-5 text-indigo-400" />
                             </button>
                         </div>
@@ -264,7 +312,7 @@ function App() {
             {state === 'RESULT' && (
                 <>
                     {error && <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded mb-4">{error}</div>}
-                    <FeedbackDisplay feedback={feedback} videoUrl={videoUrl} onSpeak={() => speak(feedback)} />
+                    <FeedbackDisplay feedback={feedback} videoUrl={videoUrl} onSpeak={() => speak(feedback, feedbackAudio)} />
                     <button
                         onClick={() => window.location.reload()}
                         className="mt-8 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700"

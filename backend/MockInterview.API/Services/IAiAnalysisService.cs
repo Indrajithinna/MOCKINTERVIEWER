@@ -4,7 +4,7 @@ namespace MockInterview.API.Services
 {
     public interface IAiAnalysisService
     {
-        Task<string> AnalyzeInterviewAsync(string videoPath, string? resumeFilePath = null);
-        Task<string> GenerateQuestionsFromResumeAsync(string resumeFilePath);
+        Task<string> AnalyzeInterviewAsync(string videoPath, string? resumeFilePath = null, string languageCode = "en-IN");
+        Task<string> GenerateQuestionsFromResumeAsync(string resumeFilePath, string languageCode = "en-IN");
     }
 }
