@@ -1,18 +1,30 @@
 import React from 'react';
+import { Volume2, RefreshCcw } from 'lucide-react';
 
 interface FeedbackProps {
     feedback: string;
     videoUrl?: string;
+    onSpeak?: () => void;
 }
 
-const FeedbackDisplay: React.FC<FeedbackProps> = ({ feedback, videoUrl }) => {
+const FeedbackDisplay: React.FC<FeedbackProps> = ({ feedback, videoUrl, onSpeak }) => {
     return (
-        <div className="max-w-2xl w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-500">
             <div className="p-8">
-                <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-6 font-display">AI Interview Feedback</h2>
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 font-display">AI Performance Review</h2>
+                    {onSpeak && (
+                        <button
+                            onClick={onSpeak}
+                            className="p-3 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-all group"
+                        >
+                            <Volume2 className="h-6 w-6 text-indigo-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                    )}
+                </div>
 
                 {videoUrl && (
-                    <div className="mb-8 rounded-lg overflow-hidden shadow-lg bg-black aspect-video">
+                    <div className="mb-8 rounded-2xl overflow-hidden shadow-2xl bg-black border border-slate-800 aspect-video group relative">
                         <video
                             src={`http://localhost:5000${videoUrl}`}
                             controls
@@ -21,18 +33,14 @@ const FeedbackDisplay: React.FC<FeedbackProps> = ({ feedback, videoUrl }) => {
                     </div>
                 )}
 
-                <div className="bg-indigo-50 dark:bg-indigo-900/30 p-6 rounded-lg border-l-4 border-indigo-500">
-                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed italic">
-                        "{feedback}"
-                    </p>
+                <div className="relative">
+                    <div className="absolute -left-4 top-0 bottom-0 w-1 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full opacity-50"></div>
+                    <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-sm">
+                        <p className="text-gray-200 text-lg leading-relaxed italic">
+                            "{feedback}"
+                        </p>
+                    </div>
                 </div>
-
-                <button
-                    onClick={() => window.location.reload()}
-                    className="mt-8 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 ease-in-out transform hover:scale-[1.02]"
-                >
-                    Try Another Question
-                </button>
             </div>
         </div>
     );

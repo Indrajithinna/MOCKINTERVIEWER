@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import WebcamRecorder from './components/WebcamRecorder';
 import Timer from './components/Timer';
 import FeedbackDisplay from './components/FeedbackDisplay';
-import { PlayCircle, Loader2, Sparkles, Upload, FileText, CheckCircle2 } from 'lucide-react';
+import { PlayCircle, Loader2, Sparkles, Upload, FileText, CheckCircle2, Volume2 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api/Interview';
 
@@ -18,6 +18,24 @@ function App() {
     const [resumePath, setResumePath] = useState<string | null>(null);
     const [isUploadingResume, setIsUploadingResume] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Speak function
+    const speak = (text: string) => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.95;
+            utterance.pitch = 1.05;
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+
+    // Automatically speak question when it changes in INTERVIEW state
+    useEffect(() => {
+        if (state === 'INTERVIEW' && question) {
+            speak(question);
+        }
+    }, [question, state]);
 
     const fetchQuestion = async () => {
         try {
@@ -71,10 +89,10 @@ function App() {
         formData.append('video', videoBlob, 'interview.webm');
 
         try {
-            const url = resumePath 
+            const url = resumePath
                 ? `${API_BASE_URL}/upload?resumeFilePath=${encodeURIComponent(resumePath)}`
                 : `${API_BASE_URL}/upload`;
-            
+
             const response = await axios.post(url, formData);
             setFeedback(response.data.aiFeedback);
             setVideoUrl(response.data.videoFilePath);
@@ -89,6 +107,22 @@ function App() {
 
     return (
         <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
+            <style>{`
+                @keyframes pulse-ring {
+                    0% { transform: scale(0.33); opacity: 1; }
+                    80%, 100% { opacity: 0; }
+                }
+                .voice-active::before {
+                    content: '';
+                    position: absolute;
+                    width: 100%;
+                    height: 100%;
+                    border: 2px solid #6366f1;
+                    border-radius: 50%;
+                    animation: pulse-ring 1.25s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+                }
+            `}</style>
+
             {state === 'START' && (
                 <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
                     <div className="relative inline-block">
@@ -118,16 +152,16 @@ function App() {
                         <p className="text-gray-400">Our AI will tailor the interview questions based on your experience and skills.</p>
                     </div>
 
-                    <div 
+                    <div
                         onClick={() => fileInputRef.current?.click()}
                         className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${resumePath ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-700 hover:border-indigo-500 hover:bg-indigo-500/5'}`}
                     >
-                        <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            onChange={handleResumeUpload} 
-                            accept=".pdf,.txt,.doc,.docx" 
-                            className="hidden" 
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleResumeUpload}
+                            accept=".pdf,.txt,.doc,.docx"
+                            className="hidden"
                         />
                         {resumePath ? (
                             <div className="flex flex-col items-center space-y-3">
@@ -161,12 +195,17 @@ function App() {
 
             {state === 'INTERVIEW' && (
                 <div className="w-full max-w-4xl space-y-6">
-                    <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-2xl">
-                        <h2 className="text-indigo-400 font-semibold mb-2 uppercase text-sm tracking-widest flex items-center gap-2">
+                    <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-2xl shadow-2xl relative overflow-hidden group">
+                        <div className="absolute top-4 right-4 animate-bounce">
+                            <button onClick={() => speak(question)} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
+                                <Volume2 className="h-5 w-5 text-indigo-400" />
+                            </button>
+                        </div>
+                        <h2 className="text-indigo-400 font-semibold mb-3 uppercase text-sm tracking-widest flex items-center gap-2">
                             {resumePath && <FileText className="w-4 h-4" />}
                             {resumePath ? 'Tailored Question' : 'General Question'}
                         </h2>
-                        <p className="text-2xl font-display font-medium leading-tight">{question}</p>
+                        <p className="text-3xl font-display font-medium leading-tight text-white pr-10">{question}</p>
                     </div>
 
                     <WebcamRecorder
@@ -188,8 +227,8 @@ function App() {
                 <div className="text-center space-y-6">
                     <Loader2 className="h-16 w-16 text-indigo-500 animate-spin mx-auto" />
                     <div>
-                        <h2 className="text-3xl font-bold mb-2">Processing...</h2>
-                        <p className="text-gray-400">Our AI is preparing your experience...</p>
+                        <h2 className="text-3xl font-bold mb-2">AI is Thinking...</h2>
+                        <p className="text-gray-400">Analyzing your response and resume context...</p>
                     </div>
                 </div>
             )}
@@ -197,10 +236,10 @@ function App() {
             {state === 'RESULT' && (
                 <>
                     {error && <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded mb-4">{error}</div>}
-                    <FeedbackDisplay feedback={feedback} videoUrl={videoUrl} />
-                    <button 
+                    <FeedbackDisplay feedback={feedback} videoUrl={videoUrl} onSpeak={() => speak(feedback)} />
+                    <button
                         onClick={() => window.location.reload()}
-                        className="mt-8 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                        className="mt-8 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700"
                     >
                         Try Another Interview
                     </button>
