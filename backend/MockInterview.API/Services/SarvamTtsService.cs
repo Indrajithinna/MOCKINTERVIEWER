@@ -38,6 +38,7 @@ namespace MockInterview.API.Services
             }
 
             var apiKey = Environment.GetEnvironmentVariable("SARVAM_API_KEY") ?? _config["AiService:SarvamApiKey"];
+            var speaker = _config["AiService:SarvamSpeaker"] ?? "meera";
             
             if (string.IsNullOrEmpty(apiKey) || apiKey == "YOUR_SARVAM_KEY_HERE")
             {
@@ -55,7 +56,7 @@ namespace MockInterview.API.Services
             {
                 inputs = new[] { text },
                 target_language_code = languageCode,
-                speaker = "meera",
+                speaker = speaker,
                 pitch = 0,
                 pace = 1.0,
                 loudness = 1.5,
