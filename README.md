@@ -6,6 +6,9 @@ This is a prototype for an AI-powered Mock Interview Platform.
 - **/backend**: ASP.NET Core Web API (.NET 8/9)
 - **/frontend**: React (Vite + TypeScript + Tailwind CSS)
 
+## Screenshots
+*(Add screenshots here showing the interview process, feedback display, and multi-language support)*
+
 ## Prerequisites
 - .NET 8 or 9 SDK
 - Node.js (v18+) & NPM
