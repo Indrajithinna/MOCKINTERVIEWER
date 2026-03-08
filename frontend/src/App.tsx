@@ -40,14 +40,23 @@ function App() {
 
     // Speak function (supports both native TTS and Sarvam Audio files)
     const speak = (text: string, audioUrl?: string) => {
+        // Stop any currently playing audio or speech synthesis
+        window.speechSynthesis.cancel();
+
         if (audioUrl) {
-            const audio = new Audio(`${API_BASE_URL.replace('/api/Interview', '')}${audioUrl}`);
-            audio.play().catch(e => console.error("Audio play failed:", e));
+            const fullUrl = `${API_BASE_URL.replace('/api/Interview', '')}${audioUrl}`;
+            const audio = new Audio(fullUrl);
+            audio.play().catch(e => {
+                console.error("Audio play failed, falling back to browser TTS:", e);
+                // Fallback to browser TTS if audio file fails
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = language;
+                window.speechSynthesis.speak(utterance);
+            });
             return;
         }
 
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = language;
             utterance.rate = 0.95;
