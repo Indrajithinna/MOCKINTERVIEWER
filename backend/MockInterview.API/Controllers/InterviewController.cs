@@ -122,7 +122,11 @@ namespace MockInterview.API.Controllers
                 CreatedAt = DateTime.UtcNow
             };
 
-            var feedbackAudioUrl = await _ttsService.GenerateSpeechAsync(feedback, language);
+            string feedbackAudioUrl = "";
+            if (!string.IsNullOrEmpty(feedback))
+            {
+                feedbackAudioUrl = await _ttsService.GenerateSpeechAsync(feedback, language);
+            }
 
             return Ok(new { session, feedbackAudioUrl });
         }
