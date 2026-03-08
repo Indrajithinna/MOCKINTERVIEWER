@@ -1,3 +1,4 @@
+using MockInterview.API.Constants;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -9,7 +10,7 @@ namespace MockInterview.API.Services
 {
     public interface ITtsService
     {
-        Task<string> GenerateSpeechAsync(string text, string languageCode = "en-IN");
+        Task<string> GenerateSpeechAsync(string text, string languageCode = LanguageCodes.English);
     }
 
     public class SarvamTtsService : ITtsService
@@ -28,8 +29,14 @@ namespace MockInterview.API.Services
             _logger = logger;
         }
 
-        public async Task<string> GenerateSpeechAsync(string text, string languageCode = "en-IN")
+        public async Task<string> GenerateSpeechAsync(string text, string languageCode = LanguageCodes.English)
         {
+            if (!LanguageCodes.IsSupported(languageCode))
+            {
+                _logger.LogWarning("Language code {LanguageCode} is not supported by Sarvam TTS.", languageCode);
+                return "";
+            }
+
             var apiKey = Environment.GetEnvironmentVariable("SARVAM_API_KEY") ?? _config["AiService:SarvamApiKey"];
             
             if (string.IsNullOrEmpty(apiKey) || apiKey == "YOUR_SARVAM_KEY_HERE")
