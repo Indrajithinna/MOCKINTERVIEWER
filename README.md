@@ -1,4 +1,3 @@
-# MockInterviewAI MVP
 
 This is a prototype for an AI-powered Mock Interview Platform.
 
