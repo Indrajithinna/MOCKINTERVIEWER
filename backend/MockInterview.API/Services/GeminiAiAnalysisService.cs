@@ -14,16 +14,20 @@ namespace MockInterview.API.Services
             _httpClient = httpClient;
         }
 
-        public async Task<string> AnalyzeInterviewAsync(string videoPath, string? resumeFilePath = null)
+        public async Task<string> AnalyzeInterviewAsync(string videoPath, string? resumeFilePath = null, string languageCode = "en-IN")
         {
-            var apiKey = _config["AiService:GeminiApiKey"];
+            var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? _config["AiService:GeminiApiKey"];
             var model = _config["AiService:Model"] ?? "gemini-1.5-flash";
             
-            if (string.IsNullOrEmpty(apiKey) || apiKey == "AIzaSyDLGbJtyKnAvDHkMu0tH4lsm5c2H5Gbwwo") 
+            if (string.IsNullOrEmpty(apiKey) || apiKey == "AIzaSyDLGbJtyKnAvDHkMu0tH4lsm5c2H5Gbwwo" || apiKey == "PASTE_YOUR_GEMINI_KEY_HERE") 
             {
-                 if (apiKey == "PASTE_YOUR_GEMINI_KEY_HERE")
-                    return "Mock Analysis: Please provide a valid Gemini API Key in appsettings.json.";
+                return "Mock Analysis: Please provide a valid Gemini API Key in the backend .env file.";
             }
+
+            var langMap = new Dictionary<string, string> {
+                {"en-IN", "English"}, {"hi-IN", "Hindi"}, {"kn-IN", "Kannada"}, {"te-IN", "Telugu"}, {"ml-IN", "Malayalam"}
+            };
+            var langDesc = langMap.ContainsKey(languageCode) ? langMap[languageCode] : "English";
 
             try
             {
@@ -47,12 +51,13 @@ namespace MockInterview.API.Services
                 // 3. Generate Content
                 var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
 
-                var prompt = "Watch this interview video carefully. " +
+                var prompt = $"Watch this interview video carefully. " +
                              (resumeUri != null ? "The user's resume is provided. " : "") +
-                             "1. Transcribe the user's speech accurately. " +
-                             "2. Provide expert-level feedback on their technical explanation, confidence, and body language." +
+                             $"1. Transcribe the user's speech accurately. " +
+                             $"2. Provide expert-level feedback on their technical explanation, confidence, and body language." +
                              (resumeUri != null ? " Compare their answers with the skills and experience mentioned in their resume." : "") +
-                             "\nFormat the output as follows:\n[TRANSCRIPT]\n(The text here)\n\n[FEEDBACK]\n(The analysis here)";
+                             $"\nIMPORTANT: Provide your FULL analysis and transcript strictly in the {langDesc} language." +
+                             "\nFormat the output exactly as follows:\n[TRANSCRIPT]\n(The text here)\n\n[FEEDBACK]\n(The analysis here)";
 
                 var parts = new List<object>
                 {
@@ -122,10 +127,15 @@ namespace MockInterview.API.Services
             return (fileProp.GetProperty("uri").GetString()!, fileProp.GetProperty("name").GetString()!);
         }
 
-        public async Task<string> GenerateQuestionsFromResumeAsync(string resumeFilePath)
+        public async Task<string> GenerateQuestionsFromResumeAsync(string resumeFilePath, string languageCode = "en-IN")
         {
-            var apiKey = _config["AiService:GeminiApiKey"];
+            var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? _config["AiService:GeminiApiKey"];
             var model = _config["AiService:Model"] ?? "gemini-1.5-flash";
+
+            var langMap = new Dictionary<string, string> {
+                {"en-IN", "English"}, {"hi-IN", "Hindi"}, {"kn-IN", "Kannada"}, {"te-IN", "Telugu"}, {"ml-IN", "Malayalam"}
+            };
+            var langDesc = langMap.ContainsKey(languageCode) ? langMap[languageCode] : "English";
 
             try
             {
@@ -136,8 +146,10 @@ namespace MockInterview.API.Services
 
                 var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
 
-                var prompt = "Based on the provided resume, generate 5 relevant technical interview questions that would be challenging for this candidate. " +
-                             "Focus on the projects, skills, and experience mentioned. Return ONLY the questions as a JSON array of strings.";
+                var prompt = $"Based on the provided resume, generate 5 relevant technical interview questions that would be challenging for this candidate. " +
+                             $"Focus on the projects, skills, and experience mentioned. " +
+                             $"IMPORTANT: The questions MUST be in the {langDesc} language. " +
+                             $"Return ONLY the questions as a JSON array of strings.";
 
                 var requestBody = new
                 {

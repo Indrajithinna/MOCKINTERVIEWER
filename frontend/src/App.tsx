@@ -12,18 +12,53 @@ type AppState = 'START' | 'RESUME_UPLOAD' | 'INTRO' | 'INTERVIEW' | 'ANALYZING' 
 function App() {
     const [state, setState] = useState<AppState>('START');
     const [question, setQuestion] = useState('');
+    const [questionAudio, setQuestionAudio] = useState('');
     const [feedback, setFeedback] = useState('');
+    const [feedbackAudio, setFeedbackAudio] = useState('');
     const [videoUrl, setVideoUrl] = useState('');
     const [error, setError] = useState('');
     const [resumePath, setResumePath] = useState<string | null>(null);
+    const [language, setLanguage] = useState('en-IN');
     const [isUploadingResume, setIsUploadingResume] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Speak function
-    const speak = (text: string) => {
+    const LANGUAGES = [
+        { code: 'en-IN', name: 'English' },
+        { code: 'hi-IN', name: 'Hindi' },
+        { code: 'kn-IN', name: 'Kannada' },
+        { code: 'te-IN', name: 'Telugu' },
+        { code: 'ml-IN', name: 'Malayalam' }
+    ];
+
+    const INTRO_TEXTS: Record<string, string> = {
+        'en-IN': "Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?",
+        'hi-IN': "नमस्ते! मैं आपका एआई मॉक इंटरव्यूअर हूँ। मैंने कुछ प्रश्न तैयार किए हैं। क्या आप शुरू करने के लिए तैयार हैं?",
+        'kn-IN': "ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ ಎಐ ಮಾಕ್ ಇಂಟರ್ವ್ಯೂವರ್. ನಾನು ನಿಮಗಾಗಿ ಕೆಲವು ಪ್ರಶ್ನೆಗಳನ್ನು ಸಿದ್ಧಪಡಿಸಿದ್ದೇನೆ. ನೀವು ಪ್ರಾರಂಭಿಸಲು ಸಿದ್ಧರಿದ್ದೀರಾ?",
+        'te-IN': "నమస్కారం! నేను మీ ఏఐ మాక్ ఇంటర్వ్యూయర్‌ను. మీ కోసం కొన్ని ప్రశ్నలను సిద్ధం చేసాను. ప్రారంభించడానికి సిద్ధంగా ఉన్నారా?",
+        'ml-IN': "നമസ്കാരം! ഞാൻ നിങ്ങളുടെ എഐ മോക്ക് ഇന്റർവ്യൂവർ ആണ്. ഞാൻ നിങ്ങൾക്കായി ചില ചോദ്യങ്ങൾ തയ്യാറാക്കിയിട്ടുണ്ട്. നിങ്ങള്‍ തുടങ്ങാൻ തയ്യാറാണോ?"
+    };
+
+    // Speak function (supports both native TTS and Sarvam Audio files)
+    const speak = (text: string, audioUrl?: string) => {
+        // Stop any currently playing audio or speech synthesis
+        window.speechSynthesis.cancel();
+
+        if (audioUrl) {
+            const fullUrl = `${API_BASE_URL.replace('/api/Interview', '')}${audioUrl}`;
+            const audio = new Audio(fullUrl);
+            audio.play().catch(e => {
+                console.error("Audio play failed, falling back to browser TTS:", e);
+                // Fallback to browser TTS if audio file fails
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = language;
+                window.speechSynthesis.speak(utterance);
+            });
+            return;
+        }
+
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = language;
             utterance.rate = 0.95;
             utterance.pitch = 1.05;
             window.speechSynthesis.speak(utterance);
@@ -33,21 +68,26 @@ function App() {
     // Automatically speak when state changes
     useEffect(() => {
         if (state === 'INTRO') {
-            speak("Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?");
+            speak(INTRO_TEXTS[language] || INTRO_TEXTS['en-IN']);
         } else if (state === 'INTERVIEW' && question) {
-            speak(question);
+            speak(question, questionAudio);
         }
-    }, [question, state]);
+    }, [question, questionAudio, state, language]);
 
     const fetchQuestion = async () => {
         try {
             if (resumePath) {
-                const response = await axios.post(`${API_BASE_URL}/resume-questions?resumeFilePath=${encodeURIComponent(resumePath)}`);
-                const questions = JSON.parse(response.data.questions);
-                setQuestion(questions[0] || "Tell me about yourself.");
-            } else {
-                const response = await axios.get(`${API_BASE_URL}/questions`);
+                const response = await axios.post(`${API_BASE_URL}/resume-questions?resumeFilePath=${encodeURIComponent(resumePath)}&language=${language}`);
                 setQuestion(response.data.question);
+                if (response.data.audioUrl) {
+                    setQuestionAudio(response.data.audioUrl);
+                }
+            } else {
+                const response = await axios.get(`${API_BASE_URL}/questions?language=${language}`);
+                setQuestion(response.data.question);
+                if (response.data.audioUrl) {
+                    setQuestionAudio(response.data.audioUrl);
+                }
             }
         } catch (err) {
             console.error('Failed to fetch question:', err);
@@ -92,12 +132,24 @@ function App() {
 
         try {
             const url = resumePath
-                ? `${API_BASE_URL}/upload?resumeFilePath=${encodeURIComponent(resumePath)}`
-                : `${API_BASE_URL}/upload`;
+                ? `${API_BASE_URL}/upload?resumeFilePath=${encodeURIComponent(resumePath)}&language=${language}`
+                : `${API_BASE_URL}/upload?language=${language}`;
 
             const response = await axios.post(url, formData);
-            setFeedback(response.data.aiFeedback);
-            setVideoUrl(response.data.videoFilePath);
+
+            // Expected response logic updated to handle audioUrl
+            if (response.data.session) {
+                setFeedback(response.data.session.aiFeedback);
+                setVideoUrl(response.data.session.videoFilePath);
+            } else {
+                setFeedback(response.data.aiFeedback);
+                setVideoUrl(response.data.videoFilePath);
+            }
+
+            if (response.data.feedbackAudioUrl) {
+                setFeedbackAudio(response.data.feedbackAudioUrl);
+            }
+
             setState('RESULT');
         } catch (err) {
             console.error('Upload failed:', err);
@@ -185,6 +237,19 @@ function App() {
                     </div>
 
                     <div className="flex flex-col space-y-3">
+                        <label className="text-gray-400 font-medium text-left">Select Interview Language</label>
+                        <select
+                            value={language}
+                            onChange={(e) => setLanguage(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+                        >
+                            {LANGUAGES.map((lang) => (
+                                <option key={lang.code} value={lang.code}>{lang.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col space-y-3">
                         <button
                             onClick={proceedToInterview}
                             className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -214,7 +279,7 @@ function App() {
                         Yes, I'm Ready!
                     </button>
                     <div className="absolute top-4 right-4">
-                        <button onClick={() => speak("Hello! I am your A I Mock Interviewer. I have prepared a few questions for you. Are you ready to begin?")} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
+                        <button onClick={() => speak(INTRO_TEXTS[language] || INTRO_TEXTS['en-IN'])} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
                             <Volume2 className="h-5 w-5 text-indigo-400" />
                         </button>
                     </div>
@@ -225,7 +290,7 @@ function App() {
                 <div className="w-full max-w-4xl space-y-6">
                     <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-2xl shadow-2xl relative overflow-hidden group">
                         <div className="absolute top-4 right-4 animate-bounce">
-                            <button onClick={() => speak(question)} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
+                            <button onClick={() => speak(question, questionAudio)} className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors">
                                 <Volume2 className="h-5 w-5 text-indigo-400" />
                             </button>
                         </div>
@@ -264,7 +329,7 @@ function App() {
             {state === 'RESULT' && (
                 <>
                     {error && <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded mb-4">{error}</div>}
-                    <FeedbackDisplay feedback={feedback} videoUrl={videoUrl} onSpeak={() => speak(feedback)} />
+                    <FeedbackDisplay feedback={feedback} videoUrl={videoUrl} onSpeak={() => speak(feedback, feedbackAudio)} />
                     <button
                         onClick={() => window.location.reload()}
                         className="mt-8 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700"

@@ -1,4 +1,3 @@
-# MockInterviewAI MVP
 
 This is a prototype for an AI-powered Mock Interview Platform.
 
@@ -6,9 +5,29 @@ This is a prototype for an AI-powered Mock Interview Platform.
 - **/backend**: ASP.NET Core Web API (.NET 8/9)
 - **/frontend**: React (Vite + TypeScript + Tailwind CSS)
 
+## Screenshots
+*(Add screenshots here showing the interview process, feedback display, and multi-language support)*
+
 ## Prerequisites
 - .NET 8 or 9 SDK
 - Node.js (v18+) & NPM
+- [Google Gemini API Key](https://aistudio.google.com/app/apikey)
+- [Sarvam AI API Key](https://www.sarvam.ai/) (For TTS)
+
+## Configuration
+
+The application requires API keys for AI services. You can set them in `appsettings.json` or as environment variables:
+
+- `AiService:GeminiApiKey` or `GEMINI_API_KEY`
+- `AiService:SarvamApiKey` or `SARVAM_API_KEY`
+
+## Supported Languages
+The platform supports mock interviews in multiple Indian languages:
+- English (en-IN)
+- Hindi (hi-IN)
+- Kannada (kn-IN)
+- Telugu (te-IN)
+- Malayalam (ml-IN)
 
 ## How to Run
 
